@@ -1,38 +1,27 @@
-FROM debian:9.2
+FROM gliderlabs/alpine:3.3
 
-LABEL maintainer "opsxcq@strm.sh"
+MAINTAINER Karthik Gaekwad
 
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    debconf-utils && \
-    echo mariadb-server mysql-server/root_password password vulnerables | debconf-set-selections && \
-    echo mariadb-server mysql-server/root_password_again password vulnerables | debconf-set-selections && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    apache2 \
-    mariadb-server \
-    php \
-    php-mysql \
-    php-pgsql \
-    php-pear \
-    php-gd \
-    && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --update \
+    python \
+    python-dev \
+    py-pip \
+    build-base \
+    curl \
+  && pip install virtualenv \
+  && rm -rf /var/cache/apk/*
 
-COPY php.ini /etc/php5/apache2/php.ini
-COPY dvwa /var/www/html
+RUN mkdir /gruyere &&\
+	curl http://google-gruyere.appspot.com/gruyere-code.zip > /gruyere/gruyere-code.zip &&\
+	cd /gruyere &&\
+	unzip gruyere-code.zip &&\
+	rm gruyere-code.zip &&\
+	sed -i 's/insecure_mode = False/insecure_mode = True/'  /gruyere/gruyere.py &&\
+	sed -i "s/_Exit('bad_id')/#_Exit('bad_id')/"  /gruyere/gruyere.py &&\
+	sed -i 's/request_ip = self.client_address\[0\]/request_ip = "127.0.0.1"/' /gruyere/gruyere.py
 
-COPY config.inc.php /var/www/html/config/
 
-RUN chown www-data:www-data -R /var/www/html && \
-    rm /var/www/html/index.html
+WORKDIR /gruyere
+EXPOSE 8008
 
-RUN service mysql start && \
-    sleep 3 && \
-    mysql -uroot -pvulnerables -e "CREATE USER app@localhost IDENTIFIED BY 'vulnerables';CREATE DATABASE dvwa;GRANT ALL privileges ON dvwa.* TO 'app'@localhost;"
-
-EXPOSE 80
-
-COPY main.sh /
-ENTRYPOINT ["/main.sh"]
+CMD ["python", "gruyere.py"]
